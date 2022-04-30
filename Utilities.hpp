@@ -1,0 +1,307 @@
+class UserPolicy
+{
+public:
+    int type; // 1 for Health, 2 for Life, 3 for Home
+    double premium;
+    int date[3];
+    double polpd; // policy period
+};
+
+void export_userprofile(string usertoken, User obj)
+{
+    string path = "./data/" + usertoken + "_userprofile.txt";
+    string line;
+
+    fstream myfileI;
+    myfileI.open(path, fstream::out);
+    if (myfileI.is_open())
+    {
+        myfileI << obj.name << endl
+                << obj.email << endl
+                << obj.dob << endl
+                << obj.address << endl
+                << obj.contactNumber << endl
+                << obj.policycount << endl;
+        myfileI.close();
+    }
+    else
+        cout << "Unable to open file for writing";
+}
+
+User import_userprofile(string usertoken)
+{
+    User obj;
+    string line;
+    string path = "./data/" + usertoken + "_userprofile.txt";
+    fstream myfileO;
+    myfileO.open(path);
+    if (myfileO.is_open())
+    {
+        getline(myfileO, line);
+        obj.name = line;
+        getline(myfileO, line);
+        obj.email = line;
+        getline(myfileO, line);
+        obj.dob = line;
+        getline(myfileO, line);
+        obj.address = line;
+        getline(myfileO, line);
+        obj.contactNumber = line;
+        getline(myfileO, line);
+        obj.policycount = stoi(line);
+        myfileO.close();
+    }
+
+    else
+        cout << "Unable to open file for reading";
+    return obj;
+}
+
+int authenticateUser(string email, string password)
+{
+
+    fstream myfileO;
+    string emailtmp, passtmp;
+    myfileO.open("./data/AUTH.txt");
+    if (myfileO.is_open())
+    {
+        while (getline(myfileO, emailtmp))
+        {
+            getline(myfileO, passtmp);
+            if (emailtmp.compare(email) == 0 and passtmp.compare(password) == 0)
+            {
+                return 1; // authentication success
+            }
+        }
+        myfileO.close();
+        return 0;
+    }
+
+    else
+        cout << "Unable to open AUTH file for authentication";
+}
+
+string getUserToken(string email)
+{
+    fstream myfileO;
+    string emailtmp;
+    string usertoken;
+    myfileO.open("./data/TOKEN.txt");
+    if (myfileO.is_open())
+    {
+        while (getline(myfileO, emailtmp))
+        {
+            getline(myfileO, usertoken);
+            if (emailtmp.compare(email) == 0)
+            {
+                return usertoken; // authentication success
+            }
+        }
+        myfileO.close();
+        return 0;
+    }
+    else
+        cout << "Unable to open AUTH file for authentication";
+}
+
+int getRandomToken()
+{
+    // generates random 6 digit number
+    return rand() % 900000 + 100000;
+}
+
+const int monthDays[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+int countLeapYears(int d[])
+{
+    int years = d[2];
+
+    if (d[1] <= 2)
+        years--;
+
+    return years / 4 - years / 100 + years / 400;
+}
+
+int getDifference(int dt1[])
+{
+
+    time_t now = time(0);
+    tm *ltm = localtime(&now);
+    int dt2[3];
+    dt2[0] = ltm->tm_mday;
+    dt2[1] = 1 + ltm->tm_mon;
+    dt2[2] = 1900 + ltm->tm_year;
+
+    long int n1 = dt1[2] * 365 + dt1[0];
+
+    // Add days for months in given date
+    for (int i = 0; i < dt1[1] - 1; i++)
+        n1 += monthDays[i];
+
+    n1 += countLeapYears(dt1);
+
+    long int n2 = dt2[2] * 365 + dt2[0];
+    for (int i = 0; i < dt2[1] - 1; i++)
+        n2 += monthDays[i];
+    n2 += countLeapYears(dt2);
+
+    // return difference between two counts
+    return (n2 - n1);
+}
+
+void export_policy_data(string userToken, UserPolicy obj)
+{
+
+    string path = "./data/" + userToken + "_userpolicy.ros";
+    ofstream ofs(path, ios::binary);
+    ofs.write((char *)&obj, sizeof(obj));
+}
+
+UserPolicy import_policy_data(string userToken)
+{
+    UserPolicy obj;
+    string path = "./data/" + userToken + "_userpolicy.ros";
+    ifstream ifs(path, ios::binary);
+    ifs.read((char *)&obj, sizeof(obj));
+    return obj;
+}
+
+void login()
+{
+    // This method is called when user wants to login
+    // Authentication
+    string useremail, password;
+    char ch;
+    cout << "Enter Your Email: ";
+    getline(cin, useremail);
+    getline(cin, useremail);
+    cout << "Enter Your Password: ";
+    ////////////////////// OS LEVEL STDIN CONTROL - WOKRS FOR LINUX UNIX Systems
+    termios oldt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    termios newt = oldt;
+    newt.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt); // disabling echo
+    getline(cin, password);
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // enabling echo
+    cout << "\n";
+    //////////////////////
+    if (authenticateUser(useremail, password) == 1)
+    {
+        cout << "Login Successful" << endl;
+        // After login activities
+        string usertoken = getUserToken(useremail);
+        User user = import_userprofile(usertoken); // load user details
+        user.showDetails();                        // show user details //TODO ACTIVE POLICIES DISPLAY
+        cout << "Do You Want To Create A New Insurance Policy? [Y/N] ";
+        char newpchoice;
+        cin >> newpchoice;
+        if (newpchoice == 'Y' or newpchoice == 'y')
+        {
+            if (user.policycount < 1)
+            {
+                Policy policy;
+                policy.createNewPolicy(stoi(usertoken));
+                UserPolicy obj;
+                obj.type = policy.type;
+                obj.premium = policy.final_premium;
+                obj.polpd = policy.policy_prd;
+                for (int i = 0; i < 3; i++)
+                    obj.date[i] = policy.date[i];
+                // saving to memory data
+                user.policycount = 1;
+                export_userprofile(usertoken, user);
+                export_policy_data(usertoken, obj);
+                cout << "Thanks for using the service.\n";
+            }
+            else
+            {
+                cout << "Sorry. One Policy Per User In This Version\nLogging you out ...\n";
+            }
+        }
+        else
+        {
+            cout << "**** Your Insurance Policy Details Below ****\n";
+            // loading from memory
+            if (user.policycount)
+            {
+                UserPolicy obj = import_policy_data(usertoken);
+                cout << "Your Initial Premium: " << obj.premium << endl;
+                double months = getDifference(obj.date) / 30;
+                double payable = (obj.polpd - months) * obj.premium;
+                if (payable > 0)
+                    cout << "Current Amount Payable: " << payable << endl;
+                else
+                    cout << "Current Amount Payable: NIL (All Paid)" << endl;
+
+                // delete policy
+                int deletechoice = 0;
+                cout << "Do You Want To Delete The Insurance Policy? (Yes=1 / No=0): ";
+                cin >> deletechoice;
+                if (deletechoice == 1)
+                {
+                    user.policycount = 0;
+                    export_userprofile(usertoken, user);
+                }
+                cout << "Thanks for using the service.\n";
+                cout << "Logging you out ...\n";
+            }
+            else
+            {
+                cout << "No Insurance Policy Registered Yet" << endl;
+                cout << "Logging you out ..." << endl;
+            }
+        }
+    }
+    else
+    {
+        cout << "Login Failed" << endl;
+    }
+}
+
+void signup()
+{
+    // This module is called when user wants to sign up
+    User userobj;
+    cout << "----------------------------------------------\n";
+    cout << "***** FILL UP THE USER REGISTRATION FORM *****\n";
+    cout << "----------------------------------------------\n";
+    cout << "Enter Your Name: ";
+    getline(cin, userobj.name);
+    getline(cin, userobj.name);
+    cout << "Enter Valid Email: ";
+    getline(cin, userobj.email);
+    userobj.userToken = getRandomToken();
+    cout << "Enter Alphanumeric Password: ";
+    ////////////////////// OS LEVEL STDIN CONTROL - WOKRS FOR LINUX UNIX Systems
+    termios oldt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    termios newt = oldt;
+    newt.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt); // disabling echo
+    getline(cin, userobj.password);
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // enabling echo
+    cout << "\n";
+    /////////////////////
+    cout << "Enter D.O.B [DDMMYYYY]: ";
+    getline(cin, userobj.dob);
+    cout << "Enter Address: ";
+    getline(cin, userobj.address);
+    cout << "Enter Contact Number: ";
+    getline(cin, userobj.contactNumber);
+    userobj.saveToAuthFile();
+    userobj.saveToTokenFile();
+    export_userprofile(to_string(userobj.userToken), userobj);
+    cout << "REGISTRATION SUCCESSFUL. LOGIN AGAIN TO CONTINUE.\n";
+}
+
+void delay_buffer()
+{
+    // This module is called when closing the program, to generate a small pause
+    int dummy = 0;
+    for (int i = 0; i < 280000000; i++)
+    {
+        // just a time buffer, to make exit look real
+        dummy = ~dummy;
+    }
+}
